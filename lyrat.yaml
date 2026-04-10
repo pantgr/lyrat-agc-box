@@ -1,0 +1,334 @@
+esphome:
+  name: lyrat
+  friendly_name: LyraT AGC Box
+  platformio_options:
+    board_build.flash_mode: dio
+  on_boot:
+    priority: -100
+    then:
+      - delay: 3s
+      - lambda: |-
+          // ES8388 init via raw I2C (address 0x10)
+          auto *bus = id(i2c_bus_id);
+          auto w = [bus](uint8_t reg, uint8_t val) {
+            uint8_t data[2] = {reg, val};
+            bus->write(0x10, data, 2);
+          };
+
+          // 1. Mute DAC first
+          w(0x19, 0x3C);
+
+          // 2. Chip control
+          w(0x08, 0x00);  // Slave mode
+          w(0x01, 0x50);  // Chip control 2
+          w(0x02, 0x00);  // Chip power normal
+          w(0x00, 0x12);  // VMIDSEL=500k, SameFs, Play&Record
+
+          // 3. DAC setup
+          w(0x17, 0x00);  // DAC I2S 24-bit
+          w(0x18, 0x02);  // DAC fs ratio 256
+          w(0x1A, 0x00);  // LDAC digital vol 0dB
+          w(0x1B, 0x00);  // RDAC digital vol 0dB
+          w(0x26, 0x00);  // LMIXSEL
+          w(0x27, 0xB8);  // LDAC to LOUT, -15dB
+          w(0x28, 0x38);  // (datasheet default)
+          w(0x29, 0x38);  // (datasheet default)
+          w(0x2A, 0xB8);  // RDAC to ROUT, -15dB
+          w(0x2B, 0x80);  // ADC/DAC share LRCK
+          w(0x2D, 0x00);  // VROI 1.5k
+
+          // 4. ADC power DOWN first
+          w(0x03, 0xFF);
+
+          // 5. ADC setup
+          w(0x09, 0x00);  // PGA gain 0dB
+          w(0x0A, 0x50);  // LINE2 input
+          w(0x0B, 0x00);  // Stereo
+          w(0x0C, 0x00);  // ADC I2S 24-bit
+          w(0x0D, 0x02);  // ADC fs ratio 256
+          w(0x10, 0x00);  // ADC L vol 0dB
+          w(0x11, 0x00);  // ADC R vol 0dB
+
+          // 6. ALC defaults (overridden by saved preset below)
+          w(0x12, 0x18);  // ALC OFF
+          w(0x13, 0x60);
+          w(0x14, 0x26);
+          w(0x15, 0x06);
+          w(0x16, 0xC3);
+
+          // 7. State machine restart
+          w(0x2B, 0x80);
+          w(0x02, 0xF0);
+          vTaskDelay(pdMS_TO_TICKS(2));
+          w(0x02, 0x00);
+
+          // 8. Unmute
+          w(0x0F, 0x60);  // ADC unmute
+          w(0x19, 0x20);  // DAC unmute
+
+          // 9. Power ON ADC
+          w(0x03, 0x09);  // ADC on, MICBIAS off
+
+          // 10. Output
+          w(0x04, 0x30);  // LOUT1 + ROUT1
+          ESP_LOGI("codec", "ES8388 ready: LINE2->ALC->LOUT1");
+
+          // Apply saved volumes from globals
+          {
+            uint8_t il = (uint8_t)(id(g_input_l) * 2);
+            uint8_t ir = (uint8_t)(id(g_input_r) * 2);
+            uint8_t ol = (uint8_t)(id(g_output_l));
+            uint8_t or_ = (uint8_t)(id(g_output_r));
+            w(0x10, il); w(0x11, ir);
+            w(0x2E, ol); w(0x2F, or_);
+            ESP_LOGI("init", "Restored: InL=%d InR=%d OutL=%d OutR=%d", id(g_input_l), id(g_input_r), id(g_output_l), id(g_output_r));
+          }
+
+          // Apply saved ALC preset from global
+          {
+            int alc = id(g_alc_mode);
+            if (alc == 1) {
+              w(0x12,0xEA); w(0x13,0xC0); w(0x14,0x12); w(0x15,0x06); w(0x16,0xC3);
+              ESP_LOGI("init", "ALC: VOICE");
+            } else if (alc == 2) {
+              w(0x12,0xF8); w(0x13,0x30); w(0x14,0xA6); w(0x15,0x06); w(0x16,0x59);
+              ESP_LOGI("init", "ALC: MUSIC");
+            } else if (alc == 3) {
+              w(0x12,0xF8); w(0x13,0x30); w(0x14,0x57); w(0x15,0x06); w(0x16,0x89);
+              ESP_LOGI("init", "ALC: GENERIC");
+            } else {
+              ESP_LOGI("init", "ALC: OFF");
+            }
+          }
+
+          // Start loopback
+          id(loopback)->start();
+          ESP_LOGI("init", "Loopback active");
+
+globals:
+  - id: g_input_l
+    type: int
+    restore_value: true
+    initial_value: '0'
+  - id: g_input_r
+    type: int
+    restore_value: true
+    initial_value: '0'
+  - id: g_output_l
+    type: int
+    restore_value: true
+    initial_value: '24'
+  - id: g_output_r
+    type: int
+    restore_value: true
+    initial_value: '24'
+  - id: g_alc_mode
+    type: int
+    restore_value: true
+    initial_value: '3'
+
+external_components:
+  - source:
+      type: local
+      path: custom_components
+    components: [i2s_loopback]
+
+esp32:
+  board: esp-wrover-kit
+  framework:
+    type: esp-idf
+    version: recommended
+    sdkconfig_options:
+      CONFIG_ESP32_BROWNOUT_DET_LVL_SEL_0: y
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+web_server:
+  port: 80
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  output_power: 8.5dB
+  power_save_mode: light
+  ap:
+    ssid: "Lyrat Fallback Hotspot"
+    password: !secret ap_password
+
+captive_portal:
+
+i2c:
+  sda: GPIO18
+  scl: GPIO23
+  frequency: 100kHz
+  id: i2c_bus_id
+
+i2s_loopback:
+  id: loopback
+
+switch:
+  - platform: gpio
+    pin: GPIO21
+    id: pa_amp
+    name: "PA Amplifier"
+    restore_mode: ALWAYS_OFF
+
+number:
+  - platform: template
+    name: "Input L"
+    id: input_l
+    min_value: 0
+    max_value: 40
+    step: 1
+    initial_value: 0
+    unit_of_measurement: "dB"
+    optimistic: true
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(g_input_l) = (int)x;
+          uint8_t val = (uint8_t)(x * 2);
+          auto *bus = id(i2c_bus_id);
+          uint8_t d[2] = {0x10, val};
+          bus->write(0x10, d, 2);
+          ESP_LOGI("vol", "ADC L = -%ddB", (int)x);
+
+  - platform: template
+    name: "Input R"
+    id: input_r
+    min_value: 0
+    max_value: 40
+    step: 1
+    initial_value: 0
+    unit_of_measurement: "dB"
+    optimistic: true
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(g_input_r) = (int)x;
+          uint8_t val = (uint8_t)(x * 2);
+          auto *bus = id(i2c_bus_id);
+          uint8_t d[2] = {0x11, val};
+          bus->write(0x10, d, 2);
+          ESP_LOGI("vol", "ADC R = -%ddB", (int)x);
+
+  - platform: template
+    name: "Output L"
+    id: output_l
+    min_value: 0
+    max_value: 33
+    step: 1
+    initial_value: 24
+    unit_of_measurement: ""
+    optimistic: true
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(g_output_l) = (int)x;
+          uint8_t val = (uint8_t)x;
+          auto *bus = id(i2c_bus_id);
+          uint8_t d[2] = {0x2E, val};
+          bus->write(0x10, d, 2);
+          ESP_LOGI("vol", "LOUT1 = %d (%+.1fdB)", val, (val * 1.5f) - 45.0f);
+
+  - platform: template
+    name: "Output R"
+    id: output_r
+    min_value: 0
+    max_value: 33
+    step: 1
+    initial_value: 24
+    unit_of_measurement: ""
+    optimistic: true
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(g_output_r) = (int)x;
+          uint8_t val = (uint8_t)x;
+          auto *bus = id(i2c_bus_id);
+          uint8_t d[2] = {0x2F, val};
+          bus->write(0x10, d, 2);
+          ESP_LOGI("vol", "ROUT1 = %d (%+.1fdB)", val, (val * 1.5f) - 45.0f);
+
+select:
+  - platform: template
+    name: "ALC Preset"
+    id: alc_preset
+    options:
+      - "OFF"
+      - "VOICE"
+      - "MUSIC"
+      - "GENERIC"
+    initial_option: "GENERIC"
+    optimistic: true
+    restore_value: true
+    set_action:
+      - lambda: |-
+          auto *bus = id(i2c_bus_id);
+          auto w = [bus](uint8_t reg, uint8_t val) {
+            uint8_t data[2] = {reg, val};
+            bus->write(0x10, data, 2);
+          };
+          std::string mode = x;
+          if (mode == "OFF") {
+            id(g_alc_mode) = 0;
+            w(0x12, 0x18);
+            w(0x13, 0x00);
+            w(0x14, 0x00);
+            w(0x15, 0x06);
+            w(0x16, 0x00);
+            ESP_LOGI("alc", "ALC OFF");
+          } else if (mode == "VOICE") {
+            id(g_alc_mode) = 1;
+            w(0x12, 0xEA);  // Stereo, Max+23.5dB, Min 0dB
+            w(0x13, 0xC0);  // Target -4.5dB, Hold 0ms
+            w(0x14, 0x12);  // Decay 820us, Attack 416us
+            w(0x15, 0x06);
+            w(0x16, 0xC3);  // NG -40.5dB, mute
+            ESP_LOGI("alc", "ALC VOICE");
+          } else if (mode == "MUSIC") {
+            id(g_alc_mode) = 2;
+            w(0x12, 0xF8);  // Stereo, Max+35.5dB, Min -12dB
+            w(0x13, 0x30);  // Target -12dB, Hold 0ms
+            w(0x14, 0xA6);  // Decay 420ms, Attack 6.66ms
+            w(0x15, 0x06);
+            w(0x16, 0x59);  // NG -60dB, hold gain
+            ESP_LOGI("alc", "ALC MUSIC");
+          } else if (mode == "GENERIC") {
+            id(g_alc_mode) = 3;
+            w(0x12, 0xF8);  // Stereo, Max+35.5dB, Min -12dB
+            w(0x13, 0x30);  // Target -12dB, Hold 0ms
+            w(0x14, 0x57);  // Decay 1.13ms, Attack 13.3ms
+            w(0x15, 0x06);
+            w(0x16, 0x89);  // NG -51dB, hold gain
+            ESP_LOGI("alc", "ALC GENERIC");
+          }
+
+button:
+  - platform: restart
+    name: "Restart"
+
+  - platform: template
+    name: "Read Registers"
+    on_press:
+      - lambda: |-
+          auto *bus = id(i2c_bus_id);
+          ESP_LOGI("reg", "--- ES8388 Register Dump ---");
+          for (uint8_t r : {0x00, 0x01, 0x02, 0x03, 0x04, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
+                            0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+                            0x26, 0x27, 0x2A, 0x2B, 0x2E, 0x2F}) {
+            uint8_t data[1] = {r};
+            uint8_t result[1] = {0xFF};
+            bus->write(0x10, data, 1, false);
+            bus->read(0x10, result, 1);
+            ESP_LOGI("reg", "0x%02X = 0x%02X", r, result[0]);
+          }
