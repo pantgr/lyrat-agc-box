@@ -40,7 +40,7 @@ TV Audio Out (AUX) -> LINE2 Input -> ES8388 ALC -> I2S Loopback -> DAC -> LOUT1 
 ## Installation
 
 1. Copy `components/` folder to your ESPHome config directory
-2. Copy `lyrat.yaml` (or `lyrat-agc-box-domatio-pc.yaml` as a template for a second unit) to your ESPHome config directory
+2. Copy `lyrat.yaml` to your ESPHome config directory
 3. Create/update your `secrets.yaml`:
    ```yaml
    wifi_ssid: "YourWiFi"
