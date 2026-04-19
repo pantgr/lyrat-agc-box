@@ -30,10 +30,10 @@ esphome:
           w(0x1A, 0x00);  // LDAC digital vol 0dB
           w(0x1B, 0x00);  // RDAC digital vol 0dB (balance done in software)
           w(0x26, 0x00);  // LMIXSEL
-          w(0x27, 0xB8);  // LDAC to LOUT, -15dB (was 0x90=0dB, TOO LOUD)
+          w(0x27, 0xB8);  // LDAC to LOUT, -15dB
           w(0x28, 0x38);  // (datasheet default)
           w(0x29, 0x38);  // (datasheet default)
-          w(0x2A, 0xB8);  // RDAC to ROUT, -15dB (was 0x90=0dB, TOO LOUD)
+          w(0x2A, 0xB8);  // RDAC to ROUT, -15dB
           w(0x2B, 0x80);  // ADC/DAC share LRCK
           w(0x2D, 0x00);  // VROI 1.5k
 
@@ -121,23 +121,23 @@ globals:
   - id: g_input_l
     type: int
     restore_value: true
-    initial_value: '20'
+    initial_value: '8'
   - id: g_input_r
     type: int
     restore_value: true
-    initial_value: '15'
+    initial_value: '8'
   - id: g_output_l
     type: float
     restore_value: true
-    initial_value: '4.5'
+    initial_value: '-10.5'
   - id: g_output_r
     type: float
     restore_value: true
-    initial_value: '4.5'
+    initial_value: '-10.5'
   - id: g_alc_mode
     type: int
     restore_value: true
-    initial_value: '3'
+    initial_value: '2'
 
 external_components:
   - source:
@@ -160,51 +160,12 @@ psram:
   mode: quad
   speed: 80MHz
 
-debug:
-  update_interval: 30s
-
-text_sensor:
-  - platform: debug
-    device:
-      name: "Device Info"
-    reset_reason:
-      name: "Reset Reason"
-
-sensor:
-  - platform: debug
-    free:
-      name: "Heap Free"
-    block:
-      name: "Heap Max Block"
-    loop_time:
-      name: "Loop Time"
-    psram:
-      name: "PSRAM Free"
-
 logger:
-  level: DEBUG
+  level: INFO
 
-api:
-  encryption:
-    key: !secret api_key
-
-ota:
-  - platform: esphome
-    password: !secret ota_password
-
-web_server:
-  port: 80
-
-wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  output_power: 8.5dB
-  power_save_mode: light
-  ap:
-    ssid: "Lyrat-Agc-Box-Domatio-Pc"
-    password: !secret ap_password
-
-captive_portal:
+# --- NO WIFI / NO API / NO OTA / NO WEB SERVER ---
+# Standalone AGC box. All settings restored from flash (globals restore_value).
+# To change settings, re-flash via USB serial only.
 
 i2c:
   sda: GPIO18
@@ -212,9 +173,6 @@ i2c:
   frequency: 100kHz
   id: i2c_bus_id
 
-# NO es8388 component! All codec config via raw I2C above.
-
-# I2S loopback - MCLK from APLL at priority 800
 i2s_loopback:
   id: loopback
 
@@ -232,7 +190,7 @@ number:
     min_value: 0
     max_value: 40
     step: 1
-    initial_value: 20
+    initial_value: 8
     unit_of_measurement: "dB"
     optimistic: true
     restore_value: true
@@ -251,7 +209,7 @@ number:
     min_value: 0
     max_value: 40
     step: 1
-    initial_value: 15
+    initial_value: 8
     unit_of_measurement: "dB"
     optimistic: true
     restore_value: true
@@ -270,7 +228,7 @@ number:
     min_value: -45
     max_value: 4.5
     step: 0.5
-    initial_value: 4.5
+    initial_value: -10.5
     unit_of_measurement: "dB"
     optimistic: true
     restore_value: true
@@ -298,7 +256,7 @@ number:
     min_value: -45
     max_value: 4.5
     step: 0.5
-    initial_value: 4.5
+    initial_value: -10.5
     unit_of_measurement: "dB"
     optimistic: true
     restore_value: true
@@ -329,7 +287,7 @@ select:
       - "VOICE"
       - "MUSIC"
       - "GENERIC"
-    initial_option: "GENERIC"
+    initial_option: "MUSIC"
     optimistic: true
     restore_value: true
     set_action:
@@ -350,46 +308,30 @@ select:
             ESP_LOGI("alc", "ALC OFF");
           } else if (mode == "VOICE") {
             id(g_alc_mode) = 1;
-            w(0x12, 0xEA);  // Stereo, Max+23.5dB, Min 0dB
-            w(0x13, 0xC0);  // Target -4.5dB, Hold 0ms
-            w(0x14, 0x12);  // Decay 820us, Attack 416us
+            w(0x12, 0xEA);
+            w(0x13, 0xC0);
+            w(0x14, 0x12);
             w(0x15, 0x06);
-            w(0x16, 0xC3);  // NG -40.5dB, mute
+            w(0x16, 0xC3);
             ESP_LOGI("alc", "ALC VOICE");
           } else if (mode == "MUSIC") {
             id(g_alc_mode) = 2;
-            w(0x12, 0xF8);  // Stereo, Max+35.5dB, Min -12dB
-            w(0x13, 0x30);  // Target -12dB, Hold 0ms
-            w(0x14, 0xA6);  // Decay 420ms, Attack 6.66ms
+            w(0x12, 0xF8);
+            w(0x13, 0x30);
+            w(0x14, 0xA6);
             w(0x15, 0x06);
-            w(0x16, 0x59);  // NG -60dB, hold gain
+            w(0x16, 0x59);
             ESP_LOGI("alc", "ALC MUSIC");
           } else if (mode == "GENERIC") {
             id(g_alc_mode) = 3;
-            w(0x12, 0xF8);  // Stereo, Max+35.5dB, Min -12dB
-            w(0x13, 0x30);  // Target -12dB, Hold 0ms
-            w(0x14, 0x57);  // Decay 1.13ms, Attack 13.3ms
+            w(0x12, 0xF8);
+            w(0x13, 0x30);
+            w(0x14, 0x57);
             w(0x15, 0x06);
-            w(0x16, 0x89);  // NG -51dB, hold gain
+            w(0x16, 0x89);
             ESP_LOGI("alc", "ALC GENERIC");
           }
 
 button:
   - platform: restart
     name: "Restart"
-
-  - platform: template
-    name: "Read Registers"
-    on_press:
-      - lambda: |-
-          auto *bus = id(i2c_bus_id);
-          ESP_LOGI("reg", "--- ES8388 Register Dump ---");
-          for (uint8_t r : {0x00, 0x01, 0x02, 0x03, 0x04, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-                            0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
-                            0x26, 0x27, 0x2A, 0x2B, 0x2E, 0x2F}) {
-            uint8_t data[1] = {r};
-            uint8_t result[1] = {0xFF};
-            bus->write(0x10, data, 1, false);  // write reg addr, no stop
-            bus->read(0x10, result, 1);         // read value
-            ESP_LOGI("reg", "0x%02X = 0x%02X", r, result[0]);
-          }
