@@ -39,8 +39,8 @@ TV Audio Out (AUX) -> LINE2 Input -> ES8388 ALC -> I2S Loopback -> DAC -> LOUT1 
 
 ## Installation
 
-1. Copy `custom_components/` folder to your ESPHome config directory
-2. Copy `lyrat.yaml` to your ESPHome config directory
+1. Copy `components/` folder to your ESPHome config directory
+2. Copy `lyrat.yaml` (or `lyrat-agc-box-domatio-pc.yaml` as a template for a second unit) to your ESPHome config directory
 3. Create/update your `secrets.yaml`:
    ```yaml
    wifi_ssid: "YourWiFi"
@@ -65,9 +65,22 @@ Key registers:
 - **0x12-0x16:** ALC control registers
 - **0x27/0x2A:** Mixer gain (-15dB to +6dB)
 
+## Recommended Hardware Mod — Remove Aux Input Capacitors C62, C64, C65, C66
+
+The LyraT V4.3 ships with four capacitors on the Aux/LINE2 input path that seriously degrade analog quality. This is an acknowledged Espressif board defect — see the official forum thread: https://esp32.com/viewtopic.php?t=12407
+
+| Cap | Value | What it does on the board | Effect of removal |
+|-----|-------|---------------------------|-------------------|
+| **C62** | 0.1 µF | Bridges L and R channels | Restores stereo channel isolation (kills crosstalk) |
+| **C64** | 0.1 µF | Shunts L input to Au_ground | Restores high-frequency response on L |
+| **C65** | 0.1 µF | Shunts R input to Au_ground | Restores high-frequency response on R |
+| **C66** | — | Degrades R input | Cleans up right channel |
+
+Desoldering all four gives a **noticeably cleaner** input with proper stereo separation and full frequency response. Both of my boards have this mod applied. **Recommended** if you're using the Aux input for anything serious. Do NOT try to compensate for these caps in software — it's a pure analog-stage issue.
+
 ## Known Issues
 
-- **LyraT V4.3 channel imbalance:** ~5dB difference (R louder) due to capacitors C62/C64/C65/C66. Corrected via different Input L/R values.
+- **Channel imbalance after the cap mod:** Some residual L/R difference may remain from board tolerances and/or your downstream chain (preamp tubes, etc.). Trim with the Input L/R sliders or, if the drift is downstream of the LyraT, on the Output L/R sliders.
 - **DAC digital volume defaults to -96dB (muted):** Registers 0x1A/0x1B must be set to 0x00 explicitly.
 - **ALC ALCSEL bits:** Register 0x12 bits[7:6] must be 11 for stereo ALC. Values like 0x38 or 0x08 have ALC OFF!
 - **Brownout on boot:** Requires `CONFIG_ESP32_BROWNOUT_DET_LVL_SEL_0: y` in sdkconfig.
