@@ -2,7 +2,7 @@
 
 #include "esphome/core/component.h"
 #include "driver/i2s_std.h"
-#include <cmath>
+#include <atomic>
 
 namespace i2s_loopback {
 
@@ -14,14 +14,10 @@ class I2SLoopback : public esphome::Component {
 
   void start();
   void stop();
-  bool is_running() { return this->running_; }
-  void set_r_atten(float db) { this->r_atten_ = powf(10.0f, -db / 20.0f); }
-  void set_l_atten(float db) { this->l_atten_ = powf(10.0f, -db / 20.0f); }
+  bool is_running() { return this->running_.load(); }
 
  protected:
-  bool running_{false};
-  float r_atten_{1.0f};
-  float l_atten_{1.0f};
+  std::atomic<bool> running_{false};
   i2s_chan_handle_t tx_handle_{nullptr};
   i2s_chan_handle_t rx_handle_{nullptr};
   TaskHandle_t task_handle_{nullptr};
