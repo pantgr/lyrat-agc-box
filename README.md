@@ -20,8 +20,26 @@ TV Audio Out (AUX) -> LINE2 Input -> ES8388 ALC -> I2S Loopback -> DAC -> LOUT1 
 - **Per-channel balance correction** for LyraT hardware imbalance (~5dB R>L)
 - **All settings persist** across reboot (ESPHome globals)
 - **Clean code** - new ESP-IDF 5.x I2S API, zero deprecated warnings
-- **WiFi controlled** via Home Assistant + ESPHome
-- **Web server** on port 80 for quick access
+- **Privacy Mode** — WiFi disabled by default at boot; **REC** onboard button (GPIO36) toggles WiFi on/off on demand
+- **Web server** on port 80 for quick access (only when WiFi is enabled)
+
+## Privacy Mode (WiFi off by default)
+
+The firmware boots with **WiFi disabled** after the ES8388 init completes. The radio is fully silent until the user presses the onboard **REC** tact button (SW3, GPIO36 / SENSOR_VP). Press REC again to disable WiFi. State does NOT persist across reboot — every power cycle starts in WiFi-off mode by design.
+
+**Why this matters:**
+
+1. **Radio-induced audio noise** — WiFi RF (especially during heavy bursts like OTA, image transfer, mDNS storms) can couple into the LyraT's analog output stage and produce audible buzz/hiss in the AGC chain. With WiFi off during normal listening, this RF source is eliminated entirely. Subjective improvement: cleaner background, lower noise floor on quiet passages.
+2. **Boot-loop / WiFi-stack recovery** — if the board ever falls into a boot loop caused by a hardware issue (e.g. cold solder joints on the ESP32 module — see Known Issues) or a corrupted WiFi NVS partition, the WiFi-off-by-default firmware breaks the failure cycle: the device finishes its codec init and goes silent on radio, giving you a stable platform to physically diagnose without WiFi instability piling on top.
+3. **Listening privacy** — for users who don't want a constantly-broadcasting device next to their TV when they aren't actively configuring it. Press the button only when you need OTA updates or HA control, otherwise it's a pure analog AGC box.
+
+**Behavior:**
+- Boot → ES8388 init runs (~3-5 sec) → WiFi disables automatically
+- Device shows **Unavailable** in Home Assistant (expected — not a fault)
+- AGC works fully throughout (hardware-resident on the ES8388, host-independent)
+- **Press REC short** → WiFi enables in ~10 sec, device returns to HA
+- **Press REC short again** → WiFi disables, device goes back to silent
+- **Important:** OTA flash is **only possible while WiFi is enabled** — press REC first.
 
 ## ALC Presets
 
