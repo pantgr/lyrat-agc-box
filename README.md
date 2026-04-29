@@ -86,6 +86,7 @@ Desoldering all four gives a **noticeably cleaner** input with proper stereo sep
 - **DAC digital volume defaults to -96dB (muted):** Registers 0x1A/0x1B must be set to 0x00 explicitly.
 - **ALC ALCSEL bits:** Register 0x12 bits[7:6] must be 11 for stereo ALC. Values like 0x38 or 0x08 have ALC OFF!
 - **Brownout on boot:** Requires `CONFIG_ESP32_BROWNOUT_DET_LVL_SEL_0: y` in sdkconfig.
+- **Boot loops on internal-antenna boards (cold solder joints):** LyraT boards shipped with an internal/PCB-antenna ESP32 module variant (i.e. ESP32-WROVER, *not* the -IE/IPEX version) can hit random boot loops, WiFi dropouts, and "fixes itself" behavior caused by cold solder joints between the ESP32 module and the LyraT carrier PCB. It looks like a firmware/OTA/WiFi bug but it isn't — it's mechanical. Re-flow the ESP32 module pads on the carrier board with a hot air station (or a careful iron) and the issue disappears. If you have the IPEX/external-antenna variant you're far less likely to see this.
 
 ## Tips
 
