@@ -59,17 +59,10 @@ The firmware boots with **WiFi disabled** after the ES8388 init completes. The r
 
 ## Installation
 
-1. Copy `components/` folder to your ESPHome config directory
+1. Copy `components/` folder to your ESPHome config directory (e.g. `/config/esphome/components/`)
 2. Copy `lyrat.yaml` to your ESPHome config directory
-3. Create/update your `secrets.yaml`:
-   ```yaml
-   wifi_ssid: "YourWiFi"
-   wifi_password: "YourPassword"
-   api_key: "generate-with-esphome"
-   ota_password: "your-ota-password"
-   ap_password: "fallback-ap-password"
-   ```
-4. Flash via ESPHome dashboard
+3. Copy `secrets.yaml.example` to `secrets.yaml` (same folder), then edit and fill in real values for each entry — see the comments inside the file for generation hints (`openssl rand -hex 16` for the OTA password, base64-encoded 32 bytes for the API encryption key, etc.). **Never commit `secrets.yaml` to git.**
+4. Flash via ESPHome dashboard (Install → Wirelessly, or via USB cable for the first flash)
 5. Adjust Input L/R sliders for channel balance (LyraT has ~5dB hardware imbalance, R louder)
 6. Set Output L/R to taste
 7. Select ALC preset (GENERIC recommended for TV)
