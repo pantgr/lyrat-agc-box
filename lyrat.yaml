@@ -116,6 +116,7 @@ esphome:
           // Start loopback
           id(loopback)->start();
           ESP_LOGI("init", "Loopback active");
+      - wifi.disable:
 
 globals:
   - id: g_input_l
@@ -153,44 +154,21 @@ esp32:
     advanced:
       sram1_as_iram: true
       minimum_chip_revision: "3.0"
-    sdkconfig_options:
-      CONFIG_ESP32_BROWNOUT_DET_LVL_SEL_0: y
 
 psram:
   mode: quad
   speed: 80MHz
-
-debug:
-  update_interval: 30s
-
-text_sensor:
-  - platform: debug
-    device:
-      name: "Device Info"
-    reset_reason:
-      name: "Reset Reason"
-
-sensor:
-  - platform: debug
-    free:
-      name: "Heap Free"
-    block:
-      name: "Heap Max Block"
-    loop_time:
-      name: "Loop Time"
-    psram:
-      name: "PSRAM Free"
 
 logger:
   level: DEBUG
 
 api:
   encryption:
-    key: !secret api_key
+    key: "VgpHndB3DxAZv8lqrs2L81d1p7tJ5PD6UJaRLGqaTU8="
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    password: "395f95092eab5eaaa1155f0fa0af295f"
 
 web_server:
   port: 80
@@ -198,11 +176,9 @@ web_server:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  output_power: 8.5dB
-  power_save_mode: light
   ap:
     ssid: "Lyrat Fallback Hotspot"
-    password: !secret ap_password
+    password: "LRHj95iXhZ6H"
 
 captive_portal:
 
@@ -329,7 +305,7 @@ select:
       - "VOICE"
       - "MUSIC"
       - "GENERIC"
-    initial_option: "GENERIC"
+    initial_option: "MUSIC"
     optimistic: true
     restore_value: true
     set_action:
@@ -373,6 +349,25 @@ select:
             w(0x16, 0x89);  // NG -51dB, hold gain
             ESP_LOGI("alc", "ALC GENERIC");
           }
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO36
+      mode: INPUT
+      inverted: true
+    name: "REC button"
+    filters:
+      - delayed_on: 30ms
+    on_press:
+      then:
+        - if:
+            condition:
+              wifi.connected:
+            then:
+              - wifi.disable:
+            else:
+              - wifi.enable:
 
 button:
   - platform: restart
