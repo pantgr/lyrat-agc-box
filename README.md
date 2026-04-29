@@ -105,6 +105,15 @@ The `hardware/` folder contains official PDFs useful for anyone hacking on this:
 - 📄 [`ES8388_datasheet.pdf`](hardware/ES8388_datasheet.pdf) — ES8388 chip datasheet (electrical specs, pinout, block diagram). Companion to the user guide.
 - 📄 [`ESP32-LyraT_v4.3_component_layout.pdf`](hardware/ESP32-LyraT_v4.3_component_layout.pdf) — official Espressif PCB component layout (top + bottom side). Use it to find C62, C64, C65, C66 for the aux input mod, or to locate any other component on the board.
 
+## Roadmap
+
+Planned enhancements that will make this even more standalone-friendly. Contributions welcome:
+
+- **Onboard tactile button control (TOUCH0–TOUCH6)** — the LyraT has 6 unused tact buttons. Mapping ideas: `TOUCH0–3` → cycle ALC presets (OFF / GENERIC / MUSIC / VOICE), `TOUCH4–5` → volume up/down, `TOUCH6` → mute or recall saved profile. This makes the box fully controllable without HA, WiFi, or any host.
+- **Pre-built `.bin` release without WiFi/HA** — once button control is in place, a "no-WiFi" firmware binary will be published in the GitHub Releases tab. Just flash, plug between TV and speakers, control with the onboard buttons. Zero setup, zero network exposure.
+- **SD card logging/profiles** — the LyraT's onboard SD slot is unused. Could store custom AGC profile presets the user creates, or log SPL history for tuning.
+- **Per-input gain auto-calibration** — auto-detect channel imbalance on a known reference tone and write the trim values to flash. Eliminates the manual oscilloscope step.
+
 ## License
 
 MIT - Free to use, modify, and distribute.
