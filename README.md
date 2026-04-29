@@ -94,6 +94,13 @@ Desoldering all four gives a **noticeably cleaner** input with proper stereo sep
 - Add bypass capacitors to the LyraT power supply for cleaner idle audio
 - The I2S loopback task runs on core 1 at priority 5 with 8KB stack
 
+## Hardware references
+
+The `hardware/` folder contains official PDFs useful for anyone hacking on this:
+
+- 📄 [`ES8388_user_guide.pdf`](hardware/ES8388_user_guide.pdf) — Everest Semi ES8388 codec full register reference (28 pages). **Read this before modifying any I²C register write in `lyrat.yaml`** — every register/bit explanation is here.
+- 📄 [`ESP32-LyraT_v4.3_component_layout.pdf`](hardware/ESP32-LyraT_v4.3_component_layout.pdf) — official Espressif PCB component layout (top + bottom side). Use it to find C62, C64, C65, C66 for the aux input mod, or to locate any other component on the board.
+
 ## License
 
 MIT - Free to use, modify, and distribute.
