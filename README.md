@@ -76,6 +76,8 @@ The LyraT V4.3 ships with four capacitors on the Aux/LINE2 input path that serio
 | **C65** | 0.1 µF | Shunts R input to Au_ground | Restores high-frequency response on R |
 | **C66** | — | Degrades R input | Cleans up right channel |
 
+📋 **Physical locations of these capacitors** on the PCB are shown in the official Espressif component layout: [hardware/ESP32-LyraT_v4.3_component_layout.pdf](hardware/ESP32-LyraT_v4.3_component_layout.pdf) (page 1 = top side, page 2 = bottom side). Use this to find C62, C64, C65, C66 before desoldering.
+
 Desoldering all four gives a **noticeably cleaner** input with proper stereo separation and full frequency response. Both of my boards have this mod applied. **Recommended** if you're using the Aux input for anything serious. Do NOT try to compensate for these caps in software — it's a pure analog-stage issue.
 
 ## Known Issues
