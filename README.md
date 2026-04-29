@@ -4,6 +4,8 @@ Turn an **ESP32-LyraT V4.3** board into a TV audio AGC (Automatic Gain Control) 
 
 **What it does:** Automatically levels TV audio - boosts quiet dialog, cuts loud scenes. No more grabbing the remote during movies!
 
+> **No Home Assistant? No problem.** The audio leveling itself runs in **hardware on the ES8388 codec**, so the AGC starts working the moment the board powers on — even with no WiFi, no HA, no host of any kind. Home Assistant is only used for live control (preset switching, volume sliders, balance trim). After you flash the firmware once with your preferred preset and balance baked in, the box is fully autonomous: plug it between TV and speakers, give it 5V power, done.
+
 ## Signal Path
 
 ```
