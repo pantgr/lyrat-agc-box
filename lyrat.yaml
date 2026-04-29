@@ -165,6 +165,7 @@ logger:
 api:
   encryption:
     key: !secret api_encryption_key
+  reboot_timeout: 0s
 
 ota:
   - platform: esphome
@@ -176,6 +177,7 @@ web_server:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  reboot_timeout: 0s
   ap:
     ssid: !secret ap_fallback_ssid
     password: !secret ap_fallback_password
