@@ -164,11 +164,11 @@ logger:
 
 api:
   encryption:
-    key: "VgpHndB3DxAZv8lqrs2L81d1p7tJ5PD6UJaRLGqaTU8="
+    key: !secret api_encryption_key
 
 ota:
   - platform: esphome
-    password: "395f95092eab5eaaa1155f0fa0af295f"
+    password: !secret ota_password
 
 web_server:
   port: 80
@@ -177,8 +177,8 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   ap:
-    ssid: "Lyrat Fallback Hotspot"
-    password: "LRHj95iXhZ6H"
+    ssid: !secret ap_fallback_ssid
+    password: !secret ap_fallback_password
 
 captive_portal:
 
