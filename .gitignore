@@ -1,0 +1,16 @@
+# Real secrets — never commit. Use secrets.yaml.example as the template.
+secrets.yaml
+
+# ESPHome build artifacts
+.esphome/
+.pioenvs/
+.piolibdeps/
+*.bin
+*.elf
+
+# Editor / OS junk
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
