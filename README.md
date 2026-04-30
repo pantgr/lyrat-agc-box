@@ -41,6 +41,17 @@ The firmware boots with **WiFi disabled** after the ES8388 init completes. The r
 - **Press REC short again** → WiFi disables, device goes back to silent
 - **Important:** OTA flash is **only possible while WiFi is enabled** — press REC first.
 
+### Stability fixes — required for reliable Privacy Mode
+
+A naive `wifi.disable:` on its own is **not enough** for stable long-term operation. We discovered that the device would silently reboot after random multi-hour intervals while in WiFi-off state (never with WiFi on). The four changes below were all needed before the device became rock-solid stable in Privacy Mode. **If you fork this and only copy the `wifi.disable:` action, expect random reboots.** Copy the full `lyrat.yaml` + `components/i2s_loopback/` for the working baseline.
+
+1. **`reboot_timeout: 0s` on both `wifi:` and `api:`** — without this, ESPHome's built-in "no WiFi connection / no client connected" timers keep counting and eventually trigger an auto-reboot, even when WiFi was deliberately disabled by the user.
+2. **Removal of `web_server`, `captive_portal`, and the `wifi.ap` fallback block** — these components run silent retry/listen loops that misbehave when their underlying network interface is intentionally down. They are unnecessary for the AGC use case anyway.
+3. **`vTaskDelay(1)` yield in the I2S loopback task's no-data path** — without an explicit yield, the loopback task at priority 5 on core 1 was starving IDLE_1, which stops feeding the task watchdog. The yield only fires when no audio buffer is ready, so it adds zero latency on hot path.
+4. **`Reset Reason` (text_sensor) + `Uptime` (sensor) diagnostic entities** — kept permanently in the yaml. They cost almost nothing to run and are invaluable when something does go wrong: the ESP32 RTC register stores the cause of the most recent reset and persists across the WiFi-off period, so when you eventually press REC and reconnect to HA, you immediately see why the last reboot happened.
+
+After all four were applied, the device ran continuously in WiFi-off Privacy Mode without unexpected reboots.
+
 ## ALC Presets
 
 | Preset | Best For | Description |
