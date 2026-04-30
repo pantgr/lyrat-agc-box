@@ -171,18 +171,13 @@ ota:
   - platform: esphome
     password: !secret ota_password
 
-# web_server removed — was likely retrying socket binds while WiFi disabled,
-# possibly contributing to long-uptime instability. Not needed for AGC use.
-# captive_portal removed — same reason; AP fallback in `wifi:` is enough
-# for emergency reconfig.
+# web_server, captive_portal, and AP fallback all removed — minimal WiFi
+# config for clean Privacy Mode. If credentials change, re-flash via USB.
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   reboot_timeout: 0s
-  ap:
-    ssid: !secret ap_fallback_ssid
-    password: !secret ap_fallback_password
 
 # Diagnostic sensors (added 2026-04-30 to track random-interval reboots).
 # Reset Reason updates ONCE on boot — no log spam during runtime.
