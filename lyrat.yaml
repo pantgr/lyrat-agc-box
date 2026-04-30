@@ -171,8 +171,10 @@ ota:
   - platform: esphome
     password: !secret ota_password
 
-web_server:
-  port: 80
+# web_server removed — was likely retrying socket binds while WiFi disabled,
+# possibly contributing to long-uptime instability. Not needed for AGC use.
+# captive_portal removed — same reason; AP fallback in `wifi:` is enough
+# for emergency reconfig.
 
 wifi:
   ssid: !secret wifi_ssid
@@ -182,7 +184,21 @@ wifi:
     ssid: !secret ap_fallback_ssid
     password: !secret ap_fallback_password
 
-captive_portal:
+# Diagnostic sensors (added 2026-04-30 to track random-interval reboots).
+# Reset Reason updates ONCE on boot — no log spam during runtime.
+# Uptime helps correlate when the reboot happened.
+debug:
+  update_interval: 60s
+
+text_sensor:
+  - platform: debug
+    reset_reason:
+      name: "Reset Reason"
+
+sensor:
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s
 
 i2c:
   sda: GPIO18
