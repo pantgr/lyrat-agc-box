@@ -60,7 +60,7 @@ void I2SLoopback::setup() {
 }
 
 void I2SLoopback::start() {
-  if (this->running_.load()) {
+  if (this->running_) {
     ESP_LOGW(TAG, "Already running");
     return;
   }
@@ -74,7 +74,7 @@ void I2SLoopback::start() {
     i2s_channel_read(this->rx_handle_, flush, sizeof(flush), &flushed, 10);
   }
 
-  this->running_.store(true);
+  this->running_ = true;
 
   BaseType_t ret = xTaskCreatePinnedToCore(
       I2SLoopback::loopback_task, "i2s_loop", 8192,
@@ -82,7 +82,7 @@ void I2SLoopback::start() {
 
   if (ret != pdPASS) {
     ESP_LOGE(TAG, "Task create failed");
-    this->running_.store(false);
+    this->running_ = false;
     return;
   }
 
@@ -90,10 +90,10 @@ void I2SLoopback::start() {
 }
 
 void I2SLoopback::stop() {
-  if (!this->running_.load()) return;
+  if (!this->running_) return;
 
-  this->running_.store(false);
-  vTaskDelay(pdMS_TO_TICKS(300));
+  this->running_ = false;
+  vTaskDelay(pdMS_TO_TICKS(200));
   this->task_handle_ = nullptr;
 
   ESP_LOGI(TAG, "Loopback stopped");
@@ -107,10 +107,26 @@ void I2SLoopback::loopback_task(void *arg) {
 
   ESP_LOGI(TAG, "Loopback task running on core %d", xPortGetCoreID());
 
-  while (self->running_.load()) {
+  while (self->running_) {
     esp_err_t ret = i2s_channel_read(self->rx_handle_, buf, sizeof(buf), &bytes_read, 100);
     if (ret == ESP_OK && bytes_read > 0) {
+      float r_att = self->r_atten_;
+      float l_att = self->l_atten_;
+      if (r_att != 1.0f || l_att != 1.0f) {
+        int32_t *samples = (int32_t *)buf;
+        int num_samples = bytes_read / 4;
+        for (int i = 0; i < num_samples; i += 2) {
+          if (l_att != 1.0f) samples[i] = (int32_t)((float)samples[i] * l_att);
+          if (r_att != 1.0f) samples[i+1] = (int32_t)((float)samples[i+1] * r_att);
+        }
+      }
+
       i2s_channel_write(self->tx_handle_, buf, bytes_read, &bytes_written, 100);
+    } else {
+      // No data ready (timeout or error) — yield briefly so the IDLE task on
+      // this core can run and feed the task watchdog. Without this yield,
+      // sustained no-data conditions could starve the scheduler over hours.
+      vTaskDelay(1);
     }
   }
 
