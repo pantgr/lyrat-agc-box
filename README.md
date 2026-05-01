@@ -1,6 +1,8 @@
-# ESP32-LyraT AGC Box
+# ESP32-LyraT V4.3 AGC Box
 
 Turn an **ESP32-LyraT V4.3** board into a TV audio AGC (Automatic Gain Control) box using ESPHome and the onboard ES8388 codec.
+
+> ⚠️ **Board version matters.** This project targets the **V4.3** revision of the LyraT board specifically. Other revisions (V4, V4.2, LyraT-Mini) have different GPIO assignments, different button layouts (the LyraT-Mini for instance has no REC/MODE tact buttons), and may use different codecs or DACs. Do not flash this firmware on a non-V4.3 board without first cross-referencing the schematic.
 
 **What it does:** Automatically levels TV audio - boosts quiet dialog, cuts loud scenes. No more grabbing the remote during movies!
 
