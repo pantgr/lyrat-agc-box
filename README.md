@@ -21,6 +21,7 @@ TV Audio Out (AUX) -> LINE2 Input -> ES8388 ALC -> I2S Loopback -> DAC -> LOUT1 
 - **All settings persist** across reboot (ESPHome globals)
 - **Clean code** - new ESP-IDF 5.x I2S API, zero deprecated warnings
 - **Privacy Mode** — WiFi disabled by default at boot; **REC** onboard button (GPIO36) toggles WiFi on/off on demand
+- **Buffer health diagnostics** — 3 sensors (`Loopback Reads OK / Fail / Max Proc us`) expose real-time I2S loopback metrics in HA so you can verify the audio task is actually working at expected rates; useful for forks tweaking audio parameters
 - **Web server** on port 80 for quick access (only when WiFi is enabled)
 
 ## Privacy Mode (WiFi off by default)
@@ -118,6 +119,28 @@ Desoldering all four gives a **noticeably cleaner** input with proper stereo sep
 - GENERIC preset works best for most TV content
 - Add bypass capacitors to the LyraT power supply for cleaner idle audio
 - The I2S loopback task runs on core 1 at priority 5 with 8KB stack
+
+## Buffer sizing diagnostics
+
+Three template sensors expose live metrics from the loopback task. They are zero-cost (12 bytes RAM, ~5 instructions per cycle) and let you verify the audio path is healthy. Useful when tweaking `dma_desc_num` / `dma_frame_num` in the loopback component or when running custom DSP that changes per-cycle CPU time.
+
+| Sensor | What it means | Healthy value | Bad value |
+|--------|---------------|---------------|-----------|
+| `Loopback Reads OK` | Cumulative count of successful I2S read+write cycles since boot. Increments at the audio buffer fill rate. | ~375/sec for default 1024-byte task buffer @ 48 kHz / 32-bit / stereo | Stuck or growing slower than expected → CPU bottleneck or DMA stall |
+| `Loopback Reads Fail` | Cumulative count of `i2s_channel_read` timeouts/errors. | **0 forever** | Any growth → DMA underrun, buffers too small for current CPU/task scheduling |
+| `Loopback Max Proc us` | Maximum time (μs) any single read+process+write cycle has taken since boot. Includes block-on-read time. | <2,667 μs steady state for default buffer; transient boot spike around 30 ms is normal | Sustained >5,000 μs → heavy DSP load, consider larger buffers or simpler processing |
+
+**Interpretation rule of thumb:**
+1. If `Reads Fail = 0` and `Max Proc us < 2,667`, your buffers are sized correctly. No tuning needed.
+2. If `Reads Fail` grows but `Max Proc us` is normal, your task is being preempted (other ESPHome components stealing CPU). Increase task priority or reduce other work.
+3. If `Max Proc us` exceeds 2,667 μs steady state, your processing is too slow per cycle. Either make processing faster (vectorize, reduce sample rate, simpler DSP) or increase `dma_frame_num` to give yourself more time per cycle.
+
+The reference setup (TV audio passthrough with optional balance) runs at ~50 μs per cycle steady state — 50× headroom over the 2,667 μs deadline. That's why the boot spike around 30 ms doesn't cause failures: the DMA ring (43 ms total) absorbs it.
+
+**Test script (35 sec capture of all 3 sensors via aioesphomeapi):**
+```bash
+timeout 35 esp-logs.sh lyrat 2>&1 | grep -E 'Loopback|Reset Reason'
+```
 
 ## Hardware references
 
