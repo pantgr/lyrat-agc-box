@@ -195,6 +195,32 @@ sensor:
     name: "Uptime"
     update_interval: 60s
 
+  # Loopback diagnostic counters — buffer sizing & health monitoring.
+  # `Reads OK` should climb at ~375/sec for the default 1024-byte task buffer
+  # @ 48 kHz / 32-bit / stereo. `Reads Fail` should stay at 0 forever.
+  # `Max Proc us` should stay below 2,667 μs for the default config; transient
+  # boot spikes around 30 ms are normal and absorbed by the DMA ring.
+  # See README "Buffer sizing diagnostics" for interpretation guide.
+  - platform: template
+    name: "Loopback Reads OK"
+    accuracy_decimals: 0
+    update_interval: 30s
+    lambda: |-
+      return (float) id(loopback)->get_reads_ok();
+  - platform: template
+    name: "Loopback Reads Fail"
+    accuracy_decimals: 0
+    update_interval: 30s
+    lambda: |-
+      return (float) id(loopback)->get_reads_fail();
+  - platform: template
+    name: "Loopback Max Proc us"
+    unit_of_measurement: "us"
+    accuracy_decimals: 0
+    update_interval: 30s
+    lambda: |-
+      return (float) id(loopback)->get_max_proc_us();
+
 i2c:
   sda: GPIO18
   scl: GPIO23
