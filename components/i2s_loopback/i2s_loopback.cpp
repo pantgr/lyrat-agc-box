@@ -1,5 +1,6 @@
 #include "i2s_loopback.h"
 #include "esphome/core/log.h"
+#include "esp_timer.h"
 
 namespace i2s_loopback {
 
@@ -108,6 +109,7 @@ void I2SLoopback::loopback_task(void *arg) {
   ESP_LOGI(TAG, "Loopback task running on core %d", xPortGetCoreID());
 
   while (self->running_) {
+    int64_t t_start = esp_timer_get_time();
     esp_err_t ret = i2s_channel_read(self->rx_handle_, buf, sizeof(buf), &bytes_read, 100);
     if (ret == ESP_OK && bytes_read > 0) {
       float r_att = self->r_atten_;
@@ -122,10 +124,16 @@ void I2SLoopback::loopback_task(void *arg) {
       }
 
       i2s_channel_write(self->tx_handle_, buf, bytes_read, &bytes_written, 100);
+
+      // Diagnostic counters: success path
+      uint32_t dt = (uint32_t)(esp_timer_get_time() - t_start);
+      self->reads_ok_++;
+      if (dt > self->max_proc_us_) self->max_proc_us_ = dt;
     } else {
       // No data ready (timeout or error) — yield briefly so the IDLE task on
       // this core can run and feed the task watchdog. Without this yield,
       // sustained no-data conditions could starve the scheduler over hours.
+      self->reads_fail_++;
       vTaskDelay(1);
     }
   }
