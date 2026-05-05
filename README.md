@@ -115,19 +115,29 @@ Desoldering all four gives a **noticeably cleaner** input with proper stereo sep
 - **Brownout on boot:** Requires `CONFIG_ESP32_BROWNOUT_DET_LVL_SEL_0: y` in sdkconfig.
 - **Boot loops on internal-antenna boards (cold solder joints):** LyraT boards shipped with an internal/PCB-antenna ESP32 module variant (i.e. ESP32-WROVER, *not* the -IE/IPEX version) can hit random boot loops, WiFi dropouts, and "fixes itself" behavior caused by cold solder joints between the ESP32 module and the LyraT carrier PCB. It looks like a firmware/OTA/WiFi bug but it isn't — it's mechanical. **Quick diagnostic test:** with the board powered, gently press down on the corner of the ESP32 module near the antenna — if it suddenly boots / WiFi reconnects / gets stable, you've confirmed cold solder joints. **Fix:** re-flow the ESP32 module pads on the carrier board with a hot air station (or a careful iron) and the issue disappears. If you have the IPEX/external-antenna variant you're far less likely to see this.
 
-- **Boot loop on first boot — `wifi:631 Starting` → `POWERON_RESET` (ESPHome 2026.4.x default 240MHz CPU + stock LyraT V4.3 power):** With ESPHome 2026.4 the implicit default CPU frequency changed from 160 MHz to 240 MHz. On stock LyraT V4.3 boards, the onboard `LD1117S33` LDO + minimal carrier-board decoupling cannot supply the microsecond-scale current spike that `esp_wifi_start()` draws when powering up the WROVER-IE PHY/RF subsystem. The chip browns out internally and resets — but reports `POWERON_RESET 0x1` rather than `BROWNOUT_RST`, with **no panic, no stack trace, no error message**. Crash signature in serial:
+- **Boot loop on first boot — `wifi:631 Starting` → `POWERON_RESET` — RESOLVED 2026-05-05 (hardware mod):** With ESPHome 2026.4 the implicit default CPU frequency changed from 160 MHz to 240 MHz. On stock LyraT V4.3 boards, the onboard 1117-series 3.3V LDO (LD1117S33 / AMS1117 footprint) cannot supply the microsecond-scale current spike that `esp_wifi_start()` draws when powering up the WROVER-IE PHY/RF subsystem. The rail sags, the chip resets — reporting `POWERON_RESET 0x1` rather than `BROWNOUT_RST`, with **no panic, no stack trace, no error message**. Crash signature in serial:
   ```
   [C][wifi:631]: Starting
   ets Jul 29 2019 12:21:46
   rst:0x1 (POWERON_RESET),boot:0x1f (SPI_FAST_FLASH_BOOT)
   ```
-  ESPHome's `safe_mode` component has a hardcoded `delay(300)` before `App.setup()` ("to allow power to stabilize before Wi-Fi/Ethernet is initialised") which is why the chip sometimes _eventually_ boots after ~10 attempts via safe-mode recovery — but normal boot remains broken.
+  ESPHome's `safe_mode` component has a hardcoded `delay(300)` before `App.setup()` ("to allow power to stabilize before Wi-Fi/Ethernet is initialised") which is why the chip sometimes _eventually_ boots after ~10 attempts via safe-mode recovery — but normal boot stays broken without a fix.
 
-  **Verified bisection (2026-05-04, 10 hours, 3 boards from different suppliers):** ruled out NVS state, PSRAM, `sram1_as_iram`, brownout detector, framework choice (ESPHome / Arduino / pure ESP-IDF all crash identically), IDF version (4.4.x and 5.5.4 both crash), GPIO0/ES8388-MCLK conflict, antenna disconnected, flash speed/mode, low-power TX settings, ESPHome wifi component code path. **Even external bench LDO regulator providing rock-solid 3.3V was not enough** — the issue is fast-transient decoupling capacitance _at the chip_, not regulator capacity.
+  **Strong diagnostic signal:** the on-board 1117 LDO **degrades over time** in this role — on the test bench, the original LDO failed, was replaced with a fresh LD1117/AMS1117 of the same class, and the replacement **also failed** within a short time. Same-part failures across replacements indicate the design is operating the part beyond its comfort zone, not a single defective unit.
 
-  **Workaround (default in this repo's `lyrat.yaml`):** Pin `cpu_frequency: 160MHz`. Lower base current → smaller WiFi PHY current spike → stays inside the LD1117 + decoupling envelope. AGC use case has _massive_ headroom at 160 MHz; you lose nothing.
+  **Verified bisection (2026-05-04, ~10 hours, 3 boards from different suppliers):** ruled out NVS state, PSRAM, `sram1_as_iram`, brownout detector, framework choice (ESPHome / Arduino / pure ESP-IDF all crash identically), IDF version, GPIO0/ES8388-MCLK conflict, antenna disconnected, flash speed/mode, low-power TX settings, ESPHome wifi component code path. We **also** misdiagnosed power early: a bench supply on the 3V3 rail showed steady 3.3V on a multimeter and we wrongly concluded "not power." That bench supply lacked the transient loop response to follow the microsecond PHY init spike — its DC voltage was perfect but it sagged on the spike. **Steady-state DC voltage ≠ proven good power.**
 
-  **Real fix (if you must run 240 MHz, e.g. for heavy custom DSP):** Replace the LyraT's onboard LD1117 power chain with a proper switch-mode 3.3V regulator capable of fast transient response and ≥200µF total bulk decoupling on the 3V3 rail near the WROVER-IE module. Confirmed working: 5V/2A switch-mode regulator board with 100µF + 100µF + inductor + 0.1µF ceramic, output injected directly into the 3V3 rail with the onboard LD1117 output disconnected. With this in place, the chip boots cleanly at 240 MHz first try.
+  **HARDWARE FIX (verified 2026-05-05 on 2 different LyraT V4.3 boards):**
+  1. De-solder the on-board 1117 3.3V LDO completely
+  2. Inject regulated power into the 3V3 rail from any external switching regulator with adequate transient response. **Two confirmed working modules** (sub-€2 on Aliexpress):
+     - **XL6009** DC-DC step-up boost converter (4A, LM2577 IC, 5–32V → 5–50V adjustable)
+     - **LM2596S** DC-DC step-down buck converter (adjustable output)
+  3. Adjust output for ~3.3V at the ESP32 3V3 pin (measured 3.320V — rock solid under all loads)
+  4. Result: chip boots cleanly first try at default 240 MHz, no boot loops EVER, all features (WiFi, PSRAM, codec, loopback) work normally
+
+  Both buck and boost topologies work — the switching topology itself isn't the magic, just the fact that a dedicated SMPS module has fast enough transient response to follow the PHY init current spike. The on-board AMS1117 is the bottleneck.
+
+  **Software workaround (default in this repo's `lyrat.yaml` — for users who do not want to do the hardware mod):** Pin `cpu_frequency: 160MHz`. Lower base current → smaller WiFi PHY current spike → fits within the dying 1117's degraded supply budget. AGC use case has _massive_ headroom at 160 MHz; you lose nothing functionally. This is a true band-aid that lets the unmodified board run reliably enough — but the 1117 LDO will continue to age, so plan to do the hardware mod eventually.
 
 ## Tips
 
