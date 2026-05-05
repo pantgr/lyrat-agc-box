@@ -115,6 +115,20 @@ Desoldering all four gives a **noticeably cleaner** input with proper stereo sep
 - **Brownout on boot:** Requires `CONFIG_ESP32_BROWNOUT_DET_LVL_SEL_0: y` in sdkconfig.
 - **Boot loops on internal-antenna boards (cold solder joints):** LyraT boards shipped with an internal/PCB-antenna ESP32 module variant (i.e. ESP32-WROVER, *not* the -IE/IPEX version) can hit random boot loops, WiFi dropouts, and "fixes itself" behavior caused by cold solder joints between the ESP32 module and the LyraT carrier PCB. It looks like a firmware/OTA/WiFi bug but it isn't — it's mechanical. **Quick diagnostic test:** with the board powered, gently press down on the corner of the ESP32 module near the antenna — if it suddenly boots / WiFi reconnects / gets stable, you've confirmed cold solder joints. **Fix:** re-flow the ESP32 module pads on the carrier board with a hot air station (or a careful iron) and the issue disappears. If you have the IPEX/external-antenna variant you're far less likely to see this.
 
+- **Boot loop on first boot — `wifi:631 Starting` → `POWERON_RESET` (ESPHome 2026.4.x default 240MHz CPU + stock LyraT V4.3 power):** With ESPHome 2026.4 the implicit default CPU frequency changed from 160 MHz to 240 MHz. On stock LyraT V4.3 boards, the onboard `LD1117S33` LDO + minimal carrier-board decoupling cannot supply the microsecond-scale current spike that `esp_wifi_start()` draws when powering up the WROVER-IE PHY/RF subsystem. The chip browns out internally and resets — but reports `POWERON_RESET 0x1` rather than `BROWNOUT_RST`, with **no panic, no stack trace, no error message**. Crash signature in serial:
+  ```
+  [C][wifi:631]: Starting
+  ets Jul 29 2019 12:21:46
+  rst:0x1 (POWERON_RESET),boot:0x1f (SPI_FAST_FLASH_BOOT)
+  ```
+  ESPHome's `safe_mode` component has a hardcoded `delay(300)` before `App.setup()` ("to allow power to stabilize before Wi-Fi/Ethernet is initialised") which is why the chip sometimes _eventually_ boots after ~10 attempts via safe-mode recovery — but normal boot remains broken.
+
+  **Verified bisection (2026-05-04, 10 hours, 3 boards from different suppliers):** ruled out NVS state, PSRAM, `sram1_as_iram`, brownout detector, framework choice (ESPHome / Arduino / pure ESP-IDF all crash identically), IDF version (4.4.x and 5.5.4 both crash), GPIO0/ES8388-MCLK conflict, antenna disconnected, flash speed/mode, low-power TX settings, ESPHome wifi component code path. **Even external bench LDO regulator providing rock-solid 3.3V was not enough** — the issue is fast-transient decoupling capacitance _at the chip_, not regulator capacity.
+
+  **Workaround (default in this repo's `lyrat.yaml`):** Pin `cpu_frequency: 160MHz`. Lower base current → smaller WiFi PHY current spike → stays inside the LD1117 + decoupling envelope. AGC use case has _massive_ headroom at 160 MHz; you lose nothing.
+
+  **Real fix (if you must run 240 MHz, e.g. for heavy custom DSP):** Replace the LyraT's onboard LD1117 power chain with a proper switch-mode 3.3V regulator capable of fast transient response and ≥200µF total bulk decoupling on the 3V3 rail near the WROVER-IE module. Confirmed working: 5V/2A switch-mode regulator board with 100µF + 100µF + inductor + 0.1µF ceramic, output injected directly into the 3V3 rail with the onboard LD1117 output disconnected. With this in place, the chip boots cleanly at 240 MHz first try.
+
 ## Tips
 
 - Set your TV/source DAC output to **maximum** for best ALC performance

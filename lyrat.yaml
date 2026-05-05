@@ -50,7 +50,7 @@ esphome:
           w(0x11, 0x00);  // ADC R vol 0dB
 
           // 6. ALC OFF for testing
-          w(0x12, 0x18);  // ALC OFF (bits[7:6]=00), max +8.5dB, min -12dB
+          w(0x12, 0x18);  // ALC OFF (bits[7:6]=00), max +11.5dB, min -12dB
           w(0x13, 0x60);  // Target -7.5dB
           w(0x14, 0x26);  // Attack=2, Decay=6
           w(0x15, 0x06);  // ALC mode
@@ -138,7 +138,7 @@ globals:
   - id: g_alc_mode
     type: int
     restore_value: true
-    initial_value: '3'
+    initial_value: '2'
 
 external_components:
   - source:
@@ -148,6 +148,7 @@ external_components:
 
 esp32:
   board: esp-wrover-kit
+  cpu_frequency: 160MHz   # SAFETY: 240MHz default crashes wifi PHY init on stock LyraT V4.3 power chain. See README "Boot loop on first boot" — only remove if you have external 2A switch-mode regulator + 200uF decoupling on 3V3 rail.
   framework:
     type: esp-idf
     version: recommended
@@ -362,6 +363,8 @@ select:
             w(0x14, 0x00);
             w(0x15, 0x06);
             w(0x16, 0x00);
+            // state machine restart per ES8388 user guide (apply preset cleanly)
+            w(0x2B, 0x80); w(0x02, 0xF0); vTaskDelay(pdMS_TO_TICKS(2)); w(0x02, 0x00);
             ESP_LOGI("alc", "ALC OFF");
           } else if (mode == "VOICE") {
             id(g_alc_mode) = 1;
@@ -370,6 +373,8 @@ select:
             w(0x14, 0x12);  // Decay 820us, Attack 416us
             w(0x15, 0x06);
             w(0x16, 0xC3);  // NG -40.5dB, mute
+            // state machine restart per ES8388 user guide (apply preset cleanly)
+            w(0x2B, 0x80); w(0x02, 0xF0); vTaskDelay(pdMS_TO_TICKS(2)); w(0x02, 0x00);
             ESP_LOGI("alc", "ALC VOICE");
           } else if (mode == "MUSIC") {
             id(g_alc_mode) = 2;
@@ -378,6 +383,8 @@ select:
             w(0x14, 0xA6);  // Decay 420ms, Attack 6.66ms
             w(0x15, 0x06);
             w(0x16, 0x59);  // NG -60dB, hold gain
+            // state machine restart per ES8388 user guide (apply preset cleanly)
+            w(0x2B, 0x80); w(0x02, 0xF0); vTaskDelay(pdMS_TO_TICKS(2)); w(0x02, 0x00);
             ESP_LOGI("alc", "ALC MUSIC");
           } else if (mode == "GENERIC") {
             id(g_alc_mode) = 3;
@@ -386,6 +393,8 @@ select:
             w(0x14, 0x57);  // Decay 1.13ms, Attack 13.3ms
             w(0x15, 0x06);
             w(0x16, 0x89);  // NG -51dB, hold gain
+            // state machine restart per ES8388 user guide (apply preset cleanly)
+            w(0x2B, 0x80); w(0x02, 0xF0); vTaskDelay(pdMS_TO_TICKS(2)); w(0x02, 0x00);
             ESP_LOGI("alc", "ALC GENERIC");
           }
 
