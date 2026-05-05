@@ -67,6 +67,8 @@ After all four were applied, the device ran continuously in WiFi-off Privacy Mod
 ## Hardware
 
 - **Board:** ESP32-LyraT V4.3 (ESP32-WROVER-E)
+- **CPU:** ESP32-D0WD-V3 rev 3.01, dual-core @ 240 MHz (full speed; works after the hardware power mod — see "Boot loop on first boot" Known Issue)
+- **PSRAM:** 8 MB (Quad SPI @ 80 MHz) — enabled in `lyrat.yaml`. Used transparently by ESPHome for log/mDNS/OTA buffers; available for future extensions (SD profiles, live DSP, larger audio buffers)
 - **Codec:** ES8388 (I2C address 0x10)
 - **I2S:** MCLK=GPIO0 (APLL), BCLK=GPIO5, LRCLK=GPIO25, DOUT=GPIO26, DIN=GPIO35
 - **I2C:** SDA=GPIO18, SCL=GPIO23
@@ -137,7 +139,7 @@ Desoldering all four gives a **noticeably cleaner** input with proper stereo sep
 
   Both buck and boost topologies work — the switching topology itself isn't the magic, just the fact that a dedicated SMPS module has fast enough transient response to follow the PHY init current spike. The on-board AMS1117 is the bottleneck.
 
-  **Software workaround (default in this repo's `lyrat.yaml` — for users who do not want to do the hardware mod):** Pin `cpu_frequency: 160MHz`. Lower base current → smaller WiFi PHY current spike → fits within the dying 1117's degraded supply budget. AGC use case has _massive_ headroom at 160 MHz; you lose nothing functionally. This is a true band-aid that lets the unmodified board run reliably enough — but the 1117 LDO will continue to age, so plan to do the hardware mod eventually.
+  **Software fallback (commented out in this repo's `lyrat.yaml` — uncomment ONLY if you do not want to do the hardware mod):** Pin `cpu_frequency: 160MHz`. Lower base current → smaller WiFi PHY current spike → fits within the dying 1117's degraded supply budget. AGC use case has _massive_ headroom at 160 MHz; you lose nothing functionally. This is a true band-aid that lets an unmodified board run reliably enough — but the 1117 LDO will continue to age, so plan to do the hardware mod eventually. **The repo default is 240 MHz** (the full speed) since the test boards now run with the hardware mod and confirm clean boot at default CPU frequency (verified 2026-05-05: full 240 MHz cold boot, 0 DMA underruns, ~375 reads/sec stable for 6+ minutes uptime, no POWERON_RESET).
 
 ## Tips
 
